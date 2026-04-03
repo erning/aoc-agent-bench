@@ -11,8 +11,8 @@ fn main() {
 fn day6() {
     println!("=== Day 6: Trash Compactor ===");
 
-    let input = include_str!("../../../puzzles/2025-06-input.txt");
-    let example = include_str!("../../../puzzles/2025-06-example.txt");
+    let input = include_str!("../puzzles/2025-06-input.txt");
+    let example = include_str!("../puzzles/2025-06-example.txt");
 
     // Part 1 - test with example first
     let example_answer = solve_day6_part1(example);
@@ -320,8 +320,8 @@ fn solve_day6_part2(input: &str) -> u64 {
 fn day10() {
     println!("\n=== Day 10: Factory ===");
 
-    let input = include_str!("../../../puzzles/2025-10-input.txt");
-    let example = include_str!("../../../puzzles/2025-10-example.txt");
+    let input = include_str!("../puzzles/2025-10-input.txt");
+    let example = include_str!("../puzzles/2025-10-example.txt");
 
     // Part 1 - test with example
     let example_answer = solve_day10_part1(example);
