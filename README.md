@@ -28,6 +28,7 @@ Correct answers used for this evaluation:
 | --- | --- | --- | ---: | --- |
 | `codex-gpt-5.4` | Stable | Correct on all four parts | 4/4 | Fully correct |
 | `claude-opus-4.6` | Stable with explicit `--bin`; plain `cargo run` is ambiguous | Correct except Day 10 part 2 | 3/4 | Very strong partial solution |
+| `claude-k2p6-preview` | Stable | Correct except Day 10 part 2 | 3/4 | Very strong partial solution |
 | `kimi-k2p5` | Stable | Correct except Day 10 part 2 | 3/4 | Fast but not exact on Day 10 part 2 |
 | `claude-qwen3.6-plus` | Panics in debug on Day 10 part 2 with integer overflow | Release build runs, but Day 10 part 2 is wrong | 3/4 | Release build runs, but final answer is wrong |
 | `claude-glm-5.1` | Panics in debug on Day 10 part 2 with integer overflow | Compile path was fixed later, but Day 10 part 2 is wrong | 3/4 | Improved, but still incorrect on the hardest part |
@@ -41,6 +42,7 @@ All times below are in local `+08:00` time. Runtime is warm release runtime in m
 | --- | ---: | ---: | ---: | ---: | ---: | --- |
 | `codex-gpt-5.4` | 9.3 min | 1 | 838.9 ms | 4 | 0 | Unit tests plus example assertions |
 | `claude-opus-4.6` | 13.8 min | 1 | 10.1 ms | 0 | 0 | No tests, no runtime self-checks |
+| `claude-k2p6-preview` | 29.1 min | 1 | 39.0 ms | 0 | 0 | No tests, no runtime self-checks |
 | `kimi-k2p5` | 30.2 min | 1 | 7.2 ms | 0 | 1 | No tests, no runtime self-checks |
 | `claude-k2p5` | 38.0 min | 1 | 59.3 ms | 0 | 0 | No tests, no runtime self-checks |
 | `claude-qwen3.6-plus` | 76.2 min | 1 | 48.4 ms | 0 | 2 | Example assertions in `main` |
@@ -51,6 +53,7 @@ Notes:
 - `claude-glm-5.1` is the only branch with a follow-up commit after the initial solve. Its first "solve" commit landed earlier, and the second commit fixed the `include_str!` paths.
 - `codex-gpt-5.4` is by far the slowest runtime, but it is also the only branch that stayed exact end-to-end.
 - `kimi-k2p5` and `claude-opus-4.6` are the fastest runtime implementations, but both miss the Day 10 part 2 optimum.
+- `claude-k2p6-preview` uses exact rational arithmetic for Day 10 part 2, which is more robust than floating-point, but its bounded search from the LP ceiling still misses the true integer optimum by a small margin (`21699` vs `21696`).
 
 ## Branch-By-Branch Assessment
 
@@ -105,6 +108,32 @@ Assessment:
 
 - Best partial solution.
 - Excellent speed, but not exact on the hardest part and not polished as a final cargo package.
+
+### `claude-k2p6-preview`
+
+Release output:
+
+- 2025-06 part 1: `5977759036837`
+- 2025-06 part 2: `9630000828442`
+- 2025-10 part 1: `524`
+- 2025-10 part 2: `21699` (incorrect; expected `21696`)
+
+Strengths:
+
+- Clean, stable development-mode run with no ambiguity.
+- Correct on all of Day 6 and Day 10 part 1.
+- Uses exact rational arithmetic (`num-rational`) for Day 10 part 2, avoiding the floating-point and overflow issues that hurt other branches.
+- Zero build warnings and zero tests (clean build, though no verification).
+- Warm runtime is respectable at about `39.0 ms`.
+
+Weaknesses:
+
+- No unit tests and no runtime example assertions.
+- Day 10 part 2 solves the LP relaxation exactly over all basis choices, then searches for an integer solution starting from the ceiling of the LP optimum. This bounded search returns `21699`, missing the true optimum `21696` by a small margin.
+
+Assessment:
+
+- Strong partial solution with the most numerically robust approach among the incorrect branches, but the integer search logic needs to be extended or replaced with an exact solver.
 
 ### `kimi-k2p5`
 
@@ -215,22 +244,26 @@ Assessment:
    - Best verification and best engineering structure.
 
 2. `claude-opus-4.6`
-   - Best partial solution.
+   - Best partial solution by delivery time and raw speed.
    - Fast and close, but not exact on Day 10 part 2.
 
-3. `kimi-k2p5`
+3. `claude-k2p6-preview`
+   - Strong partial solution with exact rational arithmetic.
+   - Very close on Day 10 part 2 (off by only 3), but still not optimal.
+
+4. `kimi-k2p5`
    - Fastest runtime.
    - Stable, but heuristic on Day 10 part 2 and therefore incorrect.
 
-4. `claude-qwen3.6-plus`
+5. `claude-qwen3.6-plus`
    - Better self-checking than most incorrect branches.
    - Debug/release mismatch makes it hard to trust.
 
-5. `claude-glm-5.1`
+6. `claude-glm-5.1`
    - Improved from the earlier state because it now compiles.
    - Still fails exactness and stability on Day 10 part 2.
 
-6. `claude-k2p5`
+7. `claude-k2p5`
    - Weakest correctness and weakest modeling choices.
 
 ## Bottom Line
@@ -238,3 +271,5 @@ Assessment:
 If I were choosing one branch to keep as the reference solution, I would keep `codex-gpt-5.4`.
 
 If I were choosing one incorrect branch to salvage, I would start from `claude-opus-4.6`: it is fast, compact, and already very close, but its Day 10 part 2 solver needs to be replaced with an exact integer method.
+
+`claude-k2p6-preview` is another good salvage candidate: it already uses exact rational arithmetic, so it avoids the floating-point pitfalls of `claude-opus-4.6`, but its bounded search from the LP ceiling needs to be widened or replaced with a proper exact-integer solver to reach the true optimum.
