@@ -27,6 +27,7 @@ Correct answers used for this evaluation:
 | Branch | Dev-mode status | Correctness summary | Correct parts | Verdict |
 | --- | --- | --- | ---: | --- |
 | `codex-gpt-5.4` | Stable | Correct on all four parts | 4/4 | Fully correct |
+| `codex-gpt-5.5` | Stable | Correct on all four parts | 4/4 | Fully correct |
 | `claude-opus-4.6` | Stable with explicit `--bin`; plain `cargo run` is ambiguous | Correct except Day 10 part 2 | 3/4 | Very strong partial solution |
 | `claude-k2p6-preview` | Stable | Correct except Day 10 part 2 | 3/4 | Very strong partial solution |
 | `kimi-k2p5` | Stable | Correct except Day 10 part 2 | 3/4 | Fast but not exact on Day 10 part 2 |
@@ -40,6 +41,7 @@ All times below are in local `+08:00` time. Runtime is warm release runtime in m
 
 | Branch | Approx. completion | Commits | Warm runtime | Rust tests | Build warnings | Verification style |
 | --- | ---: | ---: | ---: | ---: | ---: | --- |
+| `codex-gpt-5.5` | 6.7 min | 1 | 730.0 ms | 0 | 0 | Example assertions in `main` |
 | `codex-gpt-5.4` | 9.3 min | 1 | 838.9 ms | 4 | 0 | Unit tests plus example assertions |
 | `claude-opus-4.6` | 13.8 min | 1 | 10.1 ms | 0 | 0 | No tests, no runtime self-checks |
 | `claude-k2p6-preview` | 29.1 min | 1 | 39.0 ms | 0 | 0 | No tests, no runtime self-checks |
@@ -51,7 +53,8 @@ All times below are in local `+08:00` time. Runtime is warm release runtime in m
 Notes:
 
 - `claude-glm-5.1` is the only branch with a follow-up commit after the initial solve. Its first "solve" commit landed earlier, and the second commit fixed the `include_str!` paths.
-- `codex-gpt-5.4` is by far the slowest runtime, but it is also the only branch that stayed exact end-to-end.
+- `codex-gpt-5.4` and `codex-gpt-5.5` are the only branches that stayed exact end-to-end.
+- `codex-gpt-5.5` delivered faster and runs slightly faster than `codex-gpt-5.4`, but it has weaker automated verification because it has no Rust tests.
 - `kimi-k2p5` and `claude-opus-4.6` are the fastest runtime implementations, but both miss the Day 10 part 2 optimum.
 - `claude-k2p6-preview` uses exact rational arithmetic for Day 10 part 2, which is more robust than floating-point, but its bounded search from the LP ceiling still misses the true integer optimum by a small margin (`21699` vs `21696`).
 
@@ -68,7 +71,7 @@ Release output:
 
 Strengths:
 
-- The only branch that produced all four correct final answers.
+- Produced all four correct final answers.
 - Best verification discipline: 4 Rust tests plus example assertions in `main`.
 - Cleanest structure: reusable logic in `src/lib.rs`, thin CLI in `src/main.rs`.
 - Day 10 part 2 uses exact arithmetic with rational elimination and bounded search, so it avoids the floating-point and overflow traps that hurt several other branches.
@@ -79,8 +82,36 @@ Weaknesses:
 
 Assessment:
 
-- Best overall branch by a clear margin.
-- If correctness matters more than raw speed, this is the winner.
+- Best engineered branch overall.
+- If maintainability and verification matter more than raw speed, this remains the branch to keep.
+
+### `codex-gpt-5.5`
+
+Release output:
+
+- 2025-06 part 1: `5977759036837`
+- 2025-06 part 2: `9630000828442`
+- 2025-10 part 1: `524`
+- 2025-10 part 2: `21696`
+
+Strengths:
+
+- Produced all four correct final answers.
+- Fastest delivery time in the evaluated set at about `6.7 min`.
+- Uses exact rational arithmetic for Day 10 part 2 and avoids the floating-point and overflow traps.
+- Slightly faster than `codex-gpt-5.4` at about `730.0 ms` warm.
+- Stable in development mode and builds with zero warnings.
+
+Weaknesses:
+
+- No Rust tests; verification is limited to example assertions in `main`.
+- Single-file implementation is less cleanly packaged than `codex-gpt-5.4`.
+- Runtime is still much slower than the fast incorrect branches.
+
+Assessment:
+
+- Strongest challenger to `codex-gpt-5.4` and the fastest fully correct branch.
+- I would prefer it when delivery speed and a simple single-binary solution matter most, but I would still harden it with tests before using it as the reference solution.
 
 ### `claude-opus-4.6`
 
@@ -240,35 +271,41 @@ Assessment:
 ## Overall Ranking
 
 1. `codex-gpt-5.4`
-   - Only fully correct branch.
+   - Fully correct.
    - Best verification and best engineering structure.
 
-2. `claude-opus-4.6`
+2. `codex-gpt-5.5`
+   - Fully correct and fastest to deliver.
+   - Faster than `codex-gpt-5.4`, but weaker on tests and structure.
+
+3. `claude-opus-4.6`
    - Best partial solution by delivery time and raw speed.
    - Fast and close, but not exact on Day 10 part 2.
 
-3. `claude-k2p6-preview`
+4. `claude-k2p6-preview`
    - Strong partial solution with exact rational arithmetic.
    - Very close on Day 10 part 2 (off by only 3), but still not optimal.
 
-4. `kimi-k2p5`
+5. `kimi-k2p5`
    - Fastest runtime.
    - Stable, but heuristic on Day 10 part 2 and therefore incorrect.
 
-5. `claude-qwen3.6-plus`
+6. `claude-qwen3.6-plus`
    - Better self-checking than most incorrect branches.
    - Debug/release mismatch makes it hard to trust.
 
-6. `claude-glm-5.1`
+7. `claude-glm-5.1`
    - Improved from the earlier state because it now compiles.
    - Still fails exactness and stability on Day 10 part 2.
 
-7. `claude-k2p5`
+8. `claude-k2p5`
    - Weakest correctness and weakest modeling choices.
 
 ## Bottom Line
 
-If I were choosing one branch to keep as the reference solution, I would keep `codex-gpt-5.4`.
+If I were choosing one branch to keep as the reference solution, I would keep `codex-gpt-5.4` because it has the best tests and structure among the fully correct branches.
+
+`codex-gpt-5.5` is the best speed-to-correctness result: it delivered fastest and ran faster than `codex-gpt-5.4`, but it needs real tests and a cleaner module split before I would prefer it as the reference branch.
 
 If I were choosing one incorrect branch to salvage, I would start from `claude-opus-4.6`: it is fast, compact, and already very close, but its Day 10 part 2 solver needs to be replaced with an exact integer method.
 
