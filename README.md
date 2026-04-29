@@ -13,11 +13,11 @@ Correct answers used for this evaluation:
 
 - Correctness and robustness:
   - Development mode was checked with `cargo run --quiet`.
-  - `claude-opus-4.6` is a special case because plain `cargo run` is ambiguous; for that branch I used `cargo run --quiet --bin day06` and `cargo run --quiet --bin day10`.
+  - `claude-opus-4.6` and `claude-mimo-v2.5-pro` are special cases because plain `cargo run` is ambiguous; for those branches I used `cargo run --quiet --bin day06` and `cargo run --quiet --bin day10`.
 - Performance:
   - I ran `cargo build --release --quiet` first.
   - I then timed the release executable three times and report the warm mean of runs 2 and 3 to reduce first-run cache noise.
-  - For `claude-opus-4.6`, the reported runtime is the sum of `day06` and `day10`.
+  - For `claude-opus-4.6` and `claude-mimo-v2.5-pro`, the reported runtime is the sum of `day06` and `day10`.
 - Delivery time:
   - I approximated branch completion time as `HEAD commit timestamp - branch creation timestamp`.
   - Branch creation time comes from local git reflog metadata, so it is approximate by nature.
@@ -30,6 +30,7 @@ Correct answers used for this evaluation:
 | `codex-gpt-5.5` | Stable | Correct on all four parts | 4/4 | Fully correct |
 | `claude-opus-4.6` | Stable with explicit `--bin`; plain `cargo run` is ambiguous | Correct except Day 10 part 2 | 3/4 | Very strong partial solution |
 | `claude-k2p6-preview` | Stable | Correct except Day 10 part 2 | 3/4 | Very strong partial solution |
+| `claude-mimo-v2.5-pro` | Stable with explicit `--bin`; plain `cargo run` is ambiguous | Correct except Day 10 part 2 | 3/4 | Strong partial solution |
 | `kimi-k2p5` | Stable | Correct except Day 10 part 2 | 3/4 | Fast but not exact on Day 10 part 2 |
 | `claude-qwen3.6-plus` | Panics in debug on Day 10 part 2 with integer overflow | Release build runs, but Day 10 part 2 is wrong | 3/4 | Release build runs, but final answer is wrong |
 | `claude-glm-5.1` | Panics in debug on Day 10 part 2 with integer overflow | Compile path was fixed later, but Day 10 part 2 is wrong | 3/4 | Improved, but still incorrect on the hardest part |
@@ -46,6 +47,7 @@ All times below are in local `+08:00` time. Runtime is warm release runtime in m
 | `claude-opus-4.6` | 13.8 min | 1 | 10.1 ms | 0 | 0 | No tests, no runtime self-checks |
 | `claude-k2p6-preview` | 29.1 min | 1 | 39.0 ms | 0 | 0 | No tests, no runtime self-checks |
 | `kimi-k2p5` | 30.2 min | 1 | 7.2 ms | 0 | 1 | No tests, no runtime self-checks |
+| `claude-mimo-v2.5-pro` | 34.3 min | 1 | 8.1 ms | 2 | 0 | Example-based unit tests |
 | `claude-k2p5` | 38.0 min | 1 | 59.3 ms | 0 | 0 | No tests, no runtime self-checks |
 | `claude-qwen3.6-plus` | 76.2 min | 1 | 48.4 ms | 0 | 2 | Example assertions in `main` |
 | `claude-glm-5.1` | 79.9 min | 2 | 179.0 ms | 0 | 7 | Example assertions in `main` |
@@ -57,6 +59,7 @@ Notes:
 - `codex-gpt-5.5` delivered faster and runs slightly faster than `codex-gpt-5.4`, but it has weaker automated verification because it has no Rust tests.
 - `kimi-k2p5` and `claude-opus-4.6` are the fastest runtime implementations, but both miss the Day 10 part 2 optimum.
 - `claude-k2p6-preview` uses exact rational arithmetic for Day 10 part 2, which is more robust than floating-point, but its bounded search from the LP ceiling still misses the true integer optimum by a small margin (`21699` vs `21696`).
+- `claude-mimo-v2.5-pro` is the only 3/4 branch that ships Rust unit tests, and at about `8.1 ms` warm it is nearly as fast as `kimi-k2p5`, but its Day 10 part 2 branch-and-bound prunes too aggressively and returns `21012`.
 
 ## Branch-By-Branch Assessment
 
@@ -165,6 +168,33 @@ Weaknesses:
 Assessment:
 
 - Strong partial solution with the most numerically robust approach among the incorrect branches, but the integer search logic needs to be extended or replaced with an exact solver.
+
+### `claude-mimo-v2.5-pro`
+
+Release output:
+
+- 2025-06 part 1: `5977759036837`
+- 2025-06 part 2: `9630000828442`
+- 2025-10 part 1: `524`
+- 2025-10 part 2: `21012` (incorrect; expected `21696`)
+
+Strengths:
+
+- Very fast warm runtime at about `8.1 ms` (sum of `day06` and `day10`).
+- Correct on all of Day 6 and Day 10 part 1.
+- Ships example-based Rust unit tests for both Day 6 and Day 10 — the only 3/4 branch with any Rust tests.
+- Zero build warnings.
+- Separate `day06` and `day10` binaries make the internal split clear.
+
+Weaknesses:
+
+- `cargo run` is not ergonomic because the branch has multiple binaries and no default run target.
+- `src/main.rs` is still just `Hello, world!`, so the branch does not provide a polished top-level entry point.
+- Day 10 part 2 uses a floating-point two-phase simplex (LP relaxation) plus a branch-and-bound that fixes each fractional variable to either `floor` or `ceil` of its LP value and then recurses on a reduced problem. This pruning discards integer optima that lie outside `{floor, ceil}` for the chosen branching variable, and it returns `21012` instead of `21696`.
+
+Assessment:
+
+- Strong partial solution that combines fast runtime, useful tests, and a multi-binary structure, but the Day 10 part 2 ILP solver loses optimality to its branching shortcut.
 
 ### `kimi-k2p5`
 
@@ -286,19 +316,23 @@ Assessment:
    - Strong partial solution with exact rational arithmetic.
    - Very close on Day 10 part 2 (off by only 3), but still not optimal.
 
-5. `kimi-k2p5`
+5. `claude-mimo-v2.5-pro`
+   - Strong partial solution with the best test discipline among the 3/4 branches.
+   - Fast runtime at about `8.1 ms`, but Day 10 part 2 loses the optimum to an over-aggressive branch-and-bound.
+
+6. `kimi-k2p5`
    - Fastest runtime.
    - Stable, but heuristic on Day 10 part 2 and therefore incorrect.
 
-6. `claude-qwen3.6-plus`
+7. `claude-qwen3.6-plus`
    - Better self-checking than most incorrect branches.
    - Debug/release mismatch makes it hard to trust.
 
-7. `claude-glm-5.1`
+8. `claude-glm-5.1`
    - Improved from the earlier state because it now compiles.
    - Still fails exactness and stability on Day 10 part 2.
 
-8. `claude-k2p5`
+9. `claude-k2p5`
    - Weakest correctness and weakest modeling choices.
 
 ## Bottom Line
