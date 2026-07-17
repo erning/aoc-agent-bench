@@ -74,10 +74,10 @@ impl Frac {
 
 // ---- parsing ----
 
-struct Machine {
-    target_mask: u64,
-    buttons: Vec<Vec<usize>>,
-    joltage: Vec<i128>,
+pub struct Machine {
+    pub target_mask: u64,
+    pub buttons: Vec<Vec<usize>>,
+    pub joltage: Vec<i128>,
 }
 
 fn parse(input: &str) -> Vec<Machine> {
@@ -157,7 +157,7 @@ fn solve_part1(m: &Machine) -> u64 {
 // Every variable is bounded by the smallest joltage of the counters it
 // feeds, so the free variables are enumerated with pruning.
 
-fn solve_part2(m: &Machine) -> i128 {
+pub fn solve_part2(m: &Machine) -> Option<i128> {
     let n_rows = m.joltage.len();
     let n_cols = m.buttons.len();
 
@@ -200,7 +200,9 @@ fn solve_part2(m: &Machine) -> i128 {
     for r in 0..n_rows {
         let inconsistent =
             (0..n_cols).all(|c| mat[r][c].is_zero()) && !mat[r][n_cols].is_zero();
-        assert!(!inconsistent, "machine has no solution");
+        if inconsistent {
+            return None; // machine has no solution
+        }
     }
 
     let np = pivot_cols.len();
@@ -311,11 +313,16 @@ fn solve_part2(m: &Machine) -> i128 {
             for i in 0..np {
                 rem[i] = rem[i].add(mat[i][f].mul(xf));
             }
-            // Once the cost alone already exceeds the incumbent and further
-            // iterations only increase it, stop.
+            // Stop once even the most optimistic completion (including
+            // negative-cost later variables) can no longer beat the
+            // incumbent; with a non-negative coefficient the bound only
+            // grows as x increases.
             if !coef[k].is_negative() {
                 if let Some(b) = best {
-                    if base.add(cost.add(coef[k].mul(xf))).ge(&b) {
+                    let lb = base
+                        .add(cost.add(coef[k].mul(xf)))
+                        .add(suffix_opt[k + 1]);
+                    if lb.ge(&b) {
                         break;
                     }
                 }
@@ -340,10 +347,7 @@ fn solve_part2(m: &Machine) -> i128 {
         &mut best_xs,
     );
 
-    let best = best
-        .expect("machine has no solution")
-        .as_int()
-        .expect("non-integer optimum");
+    let best = best?.as_int().expect("non-integer optimum");
 
     // Self-check: rebuild the winning press counts and verify they satisfy
     // the original equations exactly (rules out infeasible "solutions").
@@ -368,7 +372,7 @@ fn solve_part2(m: &Machine) -> i128 {
     assert!(x.iter().all(|&v| v >= 0));
     assert_eq!(x.iter().sum::<i128>(), best, "solution cost mismatch");
 
-    best
+    Some(best)
 }
 
 fn main() {
@@ -377,11 +381,19 @@ fn main() {
     let machines = parse(&content);
 
     let part1: u64 = machines.iter().map(solve_part1).sum();
-    let part2: i128 = machines.iter().map(solve_part2).sum();
+    let part2: i128 = machines
+        .iter()
+        .map(|m| solve_part2(m).expect("machine has no solution"))
+        .sum();
 
     if env::var("VERBOSE").is_ok() {
         for (i, m) in machines.iter().enumerate() {
-            println!("machine {}: {} {}", i, solve_part1(m), solve_part2(m));
+            println!(
+                "machine {}: {} {}",
+                i,
+                solve_part1(m),
+                solve_part2(m).unwrap()
+            );
         }
     }
 
