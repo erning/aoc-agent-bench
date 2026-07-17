@@ -51,6 +51,25 @@ pub fn simplex_min(a: &[Vec<i64>], b: &[i64], c: &[i64]) -> Option<(Rat, Vec<Rat
         }
     }
 
+    // Drive remaining (degenerate, rhs==0) artificials out of the basis. A
+    // forced pivot on such a row keeps every rhs unchanged (rhs[i]==0), so it
+    // stays feasible; this prevents phase-2 pivots from later driving a basic
+    // artificial positive and breaking Ax = b.
+    for i in 0..rows {
+        if basis[i] >= n {
+            let mut piv_col: Option<usize> = None;
+            for j in 0..n {
+                if !t[i][j].is_zero() {
+                    piv_col = Some(j);
+                    break;
+                }
+            }
+            if let Some(col) = piv_col {
+                force_pivot(&mut t, &mut rhs, &mut basis, i, col, rows, total);
+            }
+        }
+    }
+
     // Phase 2: minimize the real cost; only structural columns may enter.
     let cost2: Vec<Rat> = (0..total)
         .map(|j| if j < n { Rat::from_i(c[j]) } else { Rat::zero() })
@@ -106,6 +125,35 @@ fn run_simplex(
             }
         }
     }
+}
+
+/// Forced pivot on a specific (leaving) row `br` and entering column `col`,,
+/// used to evict a degenerate artificial from the basis. Assumes `rhs[br] == 0`
+/// so every other rhs stays unchanged.
+fn force_pivot(
+    t: &mut Vec<Vec<Rat>>,
+    rhs: &mut Vec<Rat>,
+    basis: &mut Vec<usize>,
+    br: usize,
+    col: usize,
+    rows: usize,
+    total: usize,
+) {
+    let piv = t[br][col];
+    for j in 0..total {
+        t[br][j] = t[br][j].div(piv);
+    }
+    rhs[br] = rhs[br].div(piv);
+    for i in 0..rows {
+        if i != br && !t[i][col].is_zero() {
+            let f = t[i][col];
+            for j in 0..total {
+                t[i][j] = t[i][j].sub(f.mul(t[br][j]));
+            }
+            rhs[i] = rhs[i].sub(f.mul(rhs[br]));
+        }
+    }
+    basis[br] = col;
 }
 
 fn pivot(
