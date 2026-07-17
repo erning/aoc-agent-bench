@@ -13,11 +13,11 @@ Correct answers used for this evaluation:
 
 - Correctness and robustness:
   - Development mode was checked with `cargo run --quiet`.
-  - `claude-opus-4.6` and `claude-mimo-v2.5-pro` are special cases because plain `cargo run` is ambiguous; for those branches I used `cargo run --quiet --bin day06` and `cargo run --quiet --bin day10`.
+  - `claude-opus-4.6`, `claude-mimo-v2.5-pro`, and `kimi-k3` are special cases because plain `cargo run` is ambiguous or requires an input path; for those branches I used the explicit binary names and input files.
 - Performance:
   - I ran `cargo build --release --quiet` first.
   - I then timed the release executable three times and report the warm mean of runs 2 and 3 to reduce first-run cache noise.
-  - For `claude-opus-4.6` and `claude-mimo-v2.5-pro`, the reported runtime is the sum of `day06` and `day10`.
+  - For `claude-opus-4.6`, `claude-mimo-v2.5-pro`, and `kimi-k3`, the reported runtime is the sum of `day06` and `day10`.
 - Delivery time:
   - I approximated branch completion time as `HEAD commit timestamp - branch creation timestamp`.
   - Branch creation time comes from local git reflog metadata, so it is approximate by nature.
@@ -29,6 +29,7 @@ Correct answers used for this evaluation:
 | `codex-gpt-5.4` | Stable | Correct on all four parts | 4/4 | Fully correct |
 | `codex-gpt-5.5` | Stable | Correct on all four parts | 4/4 | Fully correct |
 | `claude-deepseek-v4-pro` | Stable | Correct on all four parts | 4/4 | Fully correct |
+| `kimi-k3` | Stable with explicit `--bin` and input path | Correct on all four parts | 4/4 | Fully correct, but slower and less polished |
 | `claude-opus-4.6` | Stable with explicit `--bin`; plain `cargo run` is ambiguous | Correct except Day 10 part 2 | 3/4 | Very strong partial solution |
 | `claude-k2p6-preview` | Stable | Correct except Day 10 part 2 | 3/4 | Very strong partial solution |
 | `claude-mimo-v2.5-pro` | Stable with explicit `--bin`; plain `cargo run` is ambiguous | Correct except Day 10 part 2 | 3/4 | Strong partial solution |
@@ -53,6 +54,7 @@ All times below are in local `+08:00` time. Runtime is warm release runtime in m
 | `claude-deepseek-v4-pro` | 62.9 min | 1 | 53.0 ms | 3 | 0 | Example-based unit tests for both days |
 | `claude-qwen3.6-plus` | 76.2 min | 1 | 48.4 ms | 0 | 2 | Example assertions in `main` |
 | `claude-glm-5.1` | 79.9 min | 2 | 179.0 ms | 0 | 7 | Example assertions in `main` |
+| `kimi-k3` | 106.2 min | 2 | 1265.0 ms | 2 | 0 | Day 10 fuzz tests plus independent verifier binary |
 
 Notes:
 
@@ -63,6 +65,7 @@ Notes:
 - `claude-k2p6-preview` uses exact rational arithmetic for Day 10 part 2, which is more robust than floating-point, but its bounded search from the LP ceiling still misses the true integer optimum by a small margin (`21699` vs `21696`).
 - `claude-mimo-v2.5-pro` is the only 3/4 branch that ships Rust unit tests, and at about `8.1 ms` warm it is nearly as fast as `kimi-k2p5`, but its Day 10 part 2 branch-and-bound prunes too aggressively and returns `21012`.
 - `claude-deepseek-v4-pro` is the third 4/4 branch, and the only fully correct branch with a runtime well under `100 ms`. Its Day 10 part 2 uses exact rational Gaussian elimination with bounded enumeration over the nullspace, guarded by a feasibility check on each partial assignment.
+- `kimi-k3` is the fourth 4/4 branch. It uses exact rational Gaussian elimination with branch-and-bound and adds two randomized fuzz tests for Day 10 part 2. The current implementation is correct, but its two-binary command-line layout is less ergonomic, the test build emits four unused-code warnings, and its warm runtime is about `1265.0 ms`.
 
 ## Branch-By-Branch Assessment
 
@@ -149,6 +152,35 @@ Assessment:
 
 - The best balance of correctness, runtime, and test discipline among the fully correct branches.
 - I would treat it as the strongest candidate for a fast, exact reference solution, with the caveat that delivery time was high and the enumeration cap should be removed or tightened if the input changes.
+
+### `kimi-k3`
+
+Release output:
+
+- 2025-06 part 1: `5977759036837`
+- 2025-06 part 2: `9630000828442`
+- 2025-10 part 1: `524`
+- 2025-10 part 2: `21696`
+
+Strengths:
+
+- Produced all four correct final answers, including the Day 10 part 2 optimum after the follow-up pruning fix.
+- Uses exact rational arithmetic and checks the reconstructed solution against every original counter equation.
+- Ships two randomized fuzz tests for Day 10 part 2; both passed in the release test run.
+- Includes an independent `verify_day10` binary that uses a separate memoized search implementation for cross-checking.
+- The release build completes without warnings and has no external dependencies.
+
+Weaknesses:
+
+- `cargo run` is not ergonomic because the branch has multiple binaries, and both binaries require an explicit input path.
+- The fuzz-test compilation emits four unused-code warnings because it includes the binary source directly.
+- Warm runtime is about `1265.0 ms`, the slowest among the fully correct branches by a substantial margin.
+- The branch took about `106.2 min` to reach its current two-commit state, the longest delivery time in the evaluated set.
+
+Assessment:
+
+- A correct and unusually well-checked implementation, but not a practical reference choice when runtime, command-line ergonomics, or delivery time matters.
+- The exact arithmetic and randomized tests make it a credible correctness baseline; the main follow-ups would be extracting shared library code, removing test warnings, and improving the search performance.
 
 ### `claude-opus-4.6`
 
@@ -346,38 +378,44 @@ Assessment:
    - Fully correct and fastest to deliver.
    - Faster than `codex-gpt-5.4`, but weaker on tests and structure.
 
-4. `claude-opus-4.6`
+4. `kimi-k3`
+   - Fully correct, with exact arithmetic and randomized Day 10 tests.
+   - Much slower than the other fully correct branches and less ergonomic to run.
+
+5. `claude-opus-4.6`
    - Best partial solution by delivery time and raw speed.
    - Fast and close, but not exact on Day 10 part 2.
 
-5. `claude-k2p6-preview`
+6. `claude-k2p6-preview`
    - Strong partial solution with exact rational arithmetic.
    - Very close on Day 10 part 2 (off by only 3), but still not optimal.
 
-6. `claude-mimo-v2.5-pro`
+7. `claude-mimo-v2.5-pro`
    - Strong partial solution with the best test discipline among the 3/4 branches.
    - Fast runtime at about `8.1 ms`, but Day 10 part 2 loses the optimum to an over-aggressive branch-and-bound.
 
-7. `kimi-k2p5`
+8. `kimi-k2p5`
    - Fastest runtime.
    - Stable, but heuristic on Day 10 part 2 and therefore incorrect.
 
-8. `claude-qwen3.6-plus`
+9. `claude-qwen3.6-plus`
    - Better self-checking than most incorrect branches.
    - Debug/release mismatch makes it hard to trust.
 
-9. `claude-glm-5.1`
+10. `claude-glm-5.1`
    - Improved from the earlier state because it now compiles.
    - Still fails exactness and stability on Day 10 part 2.
 
-10. `claude-k2p5`
-    - Weakest correctness and weakest modeling choices.
+11. `claude-k2p5`
+   - Weakest correctness and weakest modeling choices.
 
 ## Bottom Line
 
 If I were choosing one branch to keep as the reference solution, I would keep `codex-gpt-5.4` because it has the best tests and structure among the fully correct branches.
 
 `claude-deepseek-v4-pro` is the strongest alternative on a runtime basis: it is the only 4/4 branch with a sub-`100 ms` warm runtime and it ships unit tests for both days, but its delivery time was much higher and its bounded enumeration relies on a hard `50000` cap that I would want removed before treating it as the canonical solution.
+
+`kimi-k3` is also fully correct and has stronger randomized checking than most branches, but its `1265.0 ms` warm runtime, two-binary interface, and long delivery time make it better suited as a correctness cross-check than as the canonical implementation.
 
 `codex-gpt-5.5` is the best speed-to-correctness result: it delivered fastest and ran faster than `codex-gpt-5.4`, but it needs real tests and a cleaner module split before I would prefer it as the reference branch.
 
