@@ -1,0 +1,11 @@
+[package]
+name = "aoc-agent-bench"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "aoc-agent-bench"
+path = "src/main.rs"
+
+[profile.release]
+opt-level = 3
