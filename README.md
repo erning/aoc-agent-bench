@@ -29,6 +29,7 @@ Correct answers used for this evaluation:
 | `codex-gpt-5.4` | Stable | Correct on all four parts | 4/4 | Fully correct |
 | `codex-gpt-5.5` | Stable | Correct on all four parts | 4/4 | Fully correct |
 | `claude-deepseek-v4-pro` | Stable | Correct on all four parts | 4/4 | Fully correct |
+| `pi-glm-5.2` | Stable | Correct on all four parts | 4/4 | Fully correct, fast but lightly verified |
 | `kimi-k3` | Stable with explicit `--bin` and input path | Correct on all four parts | 4/4 | Fully correct, but slower and less polished |
 | `claude-opus-4.6` | Stable with explicit `--bin`; plain `cargo run` is ambiguous | Correct except Day 10 part 2 | 3/4 | Very strong partial solution |
 | `claude-k2p6-preview` | Stable | Correct except Day 10 part 2 | 3/4 | Very strong partial solution |
@@ -51,6 +52,7 @@ All times below are in local `+08:00` time. Runtime is warm release runtime in m
 | `kimi-k2p5` | 30.2 min | 1 | 7.2 ms | 0 | 1 | No tests, no runtime self-checks |
 | `claude-mimo-v2.5-pro` | 34.3 min | 1 | 8.1 ms | 2 | 0 | Example-based unit tests |
 | `claude-k2p5` | 38.0 min | 1 | 59.3 ms | 0 | 0 | No tests, no runtime self-checks |
+| `pi-glm-5.2` | 62.4 min | 2 | 20.0 ms | 0 | 0 | Example assertions in `main` |
 | `claude-deepseek-v4-pro` | 62.9 min | 1 | 53.0 ms | 3 | 0 | Example-based unit tests for both days |
 | `claude-qwen3.6-plus` | 76.2 min | 1 | 48.4 ms | 0 | 2 | Example assertions in `main` |
 | `claude-glm-5.1` | 79.9 min | 2 | 179.0 ms | 0 | 7 | Example assertions in `main` |
@@ -59,13 +61,42 @@ All times below are in local `+08:00` time. Runtime is warm release runtime in m
 Notes:
 
 - `claude-glm-5.1` is the only branch with a follow-up commit after the initial solve. Its first "solve" commit landed earlier, and the second commit fixed the `include_str!` paths.
-- `codex-gpt-5.4`, `codex-gpt-5.5`, and `claude-deepseek-v4-pro` are the only branches that stayed exact end-to-end.
+- `pi-glm-5.2` also has a follow-up commit after the initial solve. The second commit evicted degenerate artificial variables before phase 2, after which the development and release runs both produced the correct answers.
+- Before this evaluation, `codex-gpt-5.4`, `codex-gpt-5.5`, and `claude-deepseek-v4-pro` were the only branches that stayed exact end-to-end.
+- `pi-glm-5.2` is now the fourth branch that stayed exact end-to-end, and it has the fastest runtime among the fully correct branches at about `20.0 ms` warm.
 - `codex-gpt-5.5` delivered faster and runs slightly faster than `codex-gpt-5.4`, but it has weaker automated verification because it has no Rust tests.
 - `kimi-k2p5` and `claude-opus-4.6` are the fastest runtime implementations, but both miss the Day 10 part 2 optimum.
 - `claude-k2p6-preview` uses exact rational arithmetic for Day 10 part 2, which is more robust than floating-point, but its bounded search from the LP ceiling still misses the true integer optimum by a small margin (`21699` vs `21696`).
 - `claude-mimo-v2.5-pro` is the only 3/4 branch that ships Rust unit tests, and at about `8.1 ms` warm it is nearly as fast as `kimi-k2p5`, but its Day 10 part 2 branch-and-bound prunes too aggressively and returns `21012`.
-- `claude-deepseek-v4-pro` is the third 4/4 branch, and the only fully correct branch with a runtime well under `100 ms`. Its Day 10 part 2 uses exact rational Gaussian elimination with bounded enumeration over the nullspace, guarded by a feasibility check on each partial assignment.
-- `kimi-k3` is the fourth 4/4 branch. It uses exact rational Gaussian elimination with branch-and-bound and adds two randomized fuzz tests for Day 10 part 2. The current implementation is correct, but its two-binary command-line layout is less ergonomic, the test build emits four unused-code warnings, and its warm runtime is about `1265.0 ms`.
+- `claude-deepseek-v4-pro` was the third 4/4 branch, and its runtime was previously the only fully correct result well under `100 ms`. Its Day 10 part 2 uses exact rational Gaussian elimination with bounded enumeration over the nullspace, guarded by a feasibility check on each partial assignment.
+- `kimi-k3` was the fourth 4/4 branch. It uses exact rational Gaussian elimination with branch-and-bound and adds two randomized fuzz tests for Day 10 part 2. The current implementation is correct, but its two-binary command-line layout is less ergonomic, the test build emits four unused-code warnings, and its warm runtime is about `1265.0 ms`.
+
+### `pi-glm-5.2`
+
+Release output:
+
+- 2025-06 part 1: `5977759036837`
+- 2025-06 part 2: `9630000828442`
+- 2025-10 part 1: `524`
+- 2025-10 part 2: `21696`
+
+Strengths:
+
+- Produced all four correct final answers in both development and release mode.
+- Fastest runtime among the fully correct branches at about `20.0 ms` warm.
+- Uses exact rational arithmetic for the two-phase simplex relaxation and integer branch-and-bound for Day 10 part 2, avoiding floating-point rounding and heuristic-only optimization.
+- The follow-up fix removes degenerate artificial variables from the simplex basis before phase 2, making the current implementation stable on the real input.
+- Single-binary `cargo run` is unambiguous and the release build has no warnings.
+
+Weaknesses:
+
+- Ships no Rust tests and relies on example assertions in `main` for runtime verification.
+- The simplex and branch-and-bound implementation is substantial but has no independent cross-check, randomized test, or proof-oriented verification around its exactness.
+- The current result required a follow-up fix after the initial solve, so the final two-commit state is the relevant delivery point; its approximate completion time is `62.4 min`.
+
+Assessment:
+
+- A fully correct, compact, and very fast implementation. It is the best raw-performance reference among the exact branches, but its lack of automated tests makes it less trustworthy as a maintained reference than `codex-gpt-5.4` or `claude-deepseek-v4-pro`.
 
 ## Branch-By-Branch Assessment
 
@@ -374,39 +405,43 @@ Assessment:
    - Fully correct, with exact arithmetic and the fastest runtime of any 4/4 branch.
    - Ships Rust unit tests for both days, but delivery was much slower than the `codex` branches.
 
-3. `codex-gpt-5.5`
+3. `pi-glm-5.2`
+   - Fully correct and the fastest runtime among all fully correct branches.
+   - Exact arithmetic and a single-binary interface, but no Rust tests and a follow-up fix were needed.
+
+4. `codex-gpt-5.5`
    - Fully correct and fastest to deliver.
    - Faster than `codex-gpt-5.4`, but weaker on tests and structure.
 
-4. `kimi-k3`
+5. `kimi-k3`
    - Fully correct, with exact arithmetic and randomized Day 10 tests.
    - Much slower than the other fully correct branches and less ergonomic to run.
 
-5. `claude-opus-4.6`
+6. `claude-opus-4.6`
    - Best partial solution by delivery time and raw speed.
    - Fast and close, but not exact on Day 10 part 2.
 
-6. `claude-k2p6-preview`
+7. `claude-k2p6-preview`
    - Strong partial solution with exact rational arithmetic.
    - Very close on Day 10 part 2 (off by only 3), but still not optimal.
 
-7. `claude-mimo-v2.5-pro`
+8. `claude-mimo-v2.5-pro`
    - Strong partial solution with the best test discipline among the 3/4 branches.
    - Fast runtime at about `8.1 ms`, but Day 10 part 2 loses the optimum to an over-aggressive branch-and-bound.
 
-8. `kimi-k2p5`
+9. `kimi-k2p5`
    - Fastest runtime.
    - Stable, but heuristic on Day 10 part 2 and therefore incorrect.
 
-9. `claude-qwen3.6-plus`
+10. `claude-qwen3.6-plus`
    - Better self-checking than most incorrect branches.
    - Debug/release mismatch makes it hard to trust.
 
-10. `claude-glm-5.1`
+11. `claude-glm-5.1`
    - Improved from the earlier state because it now compiles.
    - Still fails exactness and stability on Day 10 part 2.
 
-11. `claude-k2p5`
+12. `claude-k2p5`
    - Weakest correctness and weakest modeling choices.
 
 ## Bottom Line
@@ -418,6 +453,8 @@ If I were choosing one branch to keep as the reference solution, I would keep `c
 `kimi-k3` is also fully correct and has stronger randomized checking than most branches, but its `1265.0 ms` warm runtime, two-binary interface, and long delivery time make it better suited as a correctness cross-check than as the canonical implementation.
 
 `codex-gpt-5.5` is the best speed-to-correctness result: it delivered fastest and ran faster than `codex-gpt-5.4`, but it needs real tests and a cleaner module split before I would prefer it as the reference branch.
+
+`pi-glm-5.2` is the best raw-performance exact branch: its custom rational simplex and integer branch-and-bound solve the current input in about `20.0 ms` warm. I would still add independent tests before using it as the canonical reference, especially because the current state depends on a follow-up fix for degenerate simplex artificials.
 
 If I were choosing one incorrect branch to salvage, I would start from `claude-opus-4.6`: it is fast, compact, and already very close, but its Day 10 part 2 solver needs to be replaced with an exact integer method.
 
