@@ -13,14 +13,15 @@ Correct answers used for this evaluation:
 
 - Correctness and robustness:
   - Development mode was checked with `cargo run --quiet`.
-  - `claude-opus-4.6`, `claude-mimo-v2.5-pro`, and `kimi-k3` are special cases because plain `cargo run` is ambiguous or requires an input path; for those branches I used the explicit binary names and input files.
+  - `claude-opus-4.6`, `claude-mimo-v2.5-pro`, `kimi-k3`, and `pi-qwen3.8-27b` are special cases because plain `cargo run` is ambiguous or requires an input path; for those branches I used the explicit binary names and input files.
 - Performance:
   - I ran `cargo build --release --quiet` first.
   - I then timed the release executable three times and report the warm mean of runs 2 and 3 to reduce first-run cache noise.
-  - For `claude-opus-4.6`, `claude-mimo-v2.5-pro`, and `kimi-k3`, the reported runtime is the sum of `day06` and `day10`.
+  - For `claude-opus-4.6`, `claude-mimo-v2.5-pro`, `kimi-k3`, and `pi-qwen3.8-27b`, the reported runtime is the sum of the two puzzle binaries.
 - Delivery time:
   - I approximated branch completion time as `HEAD commit timestamp - branch creation timestamp`.
   - Branch creation time comes from local git reflog metadata, so it is approximate by nature.
+  - For `pi-qwen3.8-27b`, completion time is measured from the first user prompt to the final answer in the saved Pi session because the solution was imported into this branch after the run.
 
 ## Correctness And Robustness
 
@@ -31,6 +32,7 @@ Correct answers used for this evaluation:
 | `claude-deepseek-v4-pro` | Stable | Correct on all four parts | 4/4 | Fully correct |
 | `pi-glm-5.2` | Stable | Correct on all four parts | 4/4 | Fully correct, fast but lightly verified |
 | `kimi-k3` | Stable with explicit `--bin` and input path | Correct on all four parts | 4/4 | Fully correct, but slower and less polished |
+| `pi-qwen3.8-27b` | Stable with explicit `--bin` and input path | Correct on all four parts | 4/4 | Fully correct, but slow and required one harness-recovery prompt |
 | `claude-opus-4.6` | Stable with explicit `--bin`; plain `cargo run` is ambiguous | Correct except Day 10 part 2 | 3/4 | Very strong partial solution |
 | `claude-k2p6-preview` | Stable | Correct except Day 10 part 2 | 3/4 | Very strong partial solution |
 | `claude-mimo-v2.5-pro` | Stable with explicit `--bin`; plain `cargo run` is ambiguous | Correct except Day 10 part 2 | 3/4 | Strong partial solution |
@@ -55,6 +57,7 @@ All times below are in local `+08:00` time. Runtime is warm release runtime in m
 | `pi-glm-5.2` | 62.4 min | 2 | 20.0 ms | 0 | 0 | Example assertions in `main` |
 | `claude-deepseek-v4-pro` | 62.9 min | 1 | 53.0 ms | 3 | 0 | Example-based unit tests for both days |
 | `claude-qwen3.6-plus` | 76.2 min | 1 | 48.4 ms | 0 | 2 | Example assertions in `main` |
+| `pi-qwen3.8-27b` | 78.7 min | 1 | 3545.0 ms | 0 | 1 | Examples, internal feasibility checks, and independent Python spot checks |
 | `claude-glm-5.1` | 79.9 min | 2 | 179.0 ms | 0 | 7 | Example assertions in `main` |
 | `kimi-k3` | 106.2 min | 2 | 1265.0 ms | 2 | 0 | Day 10 fuzz tests plus independent verifier binary |
 
@@ -70,6 +73,7 @@ Notes:
 - `claude-mimo-v2.5-pro` is the only 3/4 branch that ships Rust unit tests, and at about `8.1 ms` warm it is nearly as fast as `kimi-k2p5`, but its Day 10 part 2 branch-and-bound prunes too aggressively and returns `21012`.
 - `claude-deepseek-v4-pro` was the third 4/4 branch, and its runtime was previously the only fully correct result well under `100 ms`. Its Day 10 part 2 uses exact rational Gaussian elimination with bounded enumeration over the nullspace, guarded by a feasibility check on each partial assignment.
 - `kimi-k3` was the fourth 4/4 branch. It uses exact rational Gaussian elimination with branch-and-bound and adds two randomized fuzz tests for Day 10 part 2. The current implementation is correct, but its two-binary command-line layout is less ergonomic, the test build emits four unused-code warnings, and its warm runtime is about `1265.0 ms`.
+- `pi-qwen3.8-27b` is the sixth branch to reach 4/4. It uses exact rational LP relaxation with integer branch-and-bound, but its `3545.0 ms` warm runtime is the slowest among the fully correct branches. The run used Pi 0.84.2, Ollama 0.32.13, Qwen3.8-27B Q4_K_M on an RTX 5090, a configured 65,536-token context window (not the model's maximum), and medium thinking.
 
 ### `pi-glm-5.2`
 
@@ -212,6 +216,41 @@ Assessment:
 
 - A correct and unusually well-checked implementation, but not a practical reference choice when runtime, command-line ergonomics, or delivery time matters.
 - The exact arithmetic and randomized tests make it a credible correctness baseline; the main follow-ups would be extracting shared library code, removing test warnings, and improving the search performance.
+
+### `pi-qwen3.8-27b`
+
+Release output:
+
+- 2025-06 part 1: `5977759036837`
+- 2025-06 part 2: `9630000828442`
+- 2025-10 part 1: `524`
+- 2025-10 part 2: `21696`
+
+Run configuration:
+
+- Pi coding agent 0.84.2 with its built-in read, write, edit, bash, grep, find, and ls tools.
+- Ollama 0.32.13 serving `qwen3.8:27b` Q4_K_M on an RTX 5090.
+- Configured 65,536-token context window (not the model's maximum), medium thinking, no answer-bearing README in the working directory, and no network or parent-directory reads in the saved session.
+
+Strengths:
+
+- Produced all four correct answers in development and release mode without algorithmic hints.
+- Uses exact rational arithmetic for the Day 10 part 2 LP relaxation and integer branch-and-bound rather than floating-point or heuristic optimization.
+- Verifies every reconstructed Day 10 part 2 solution against the original counter equations.
+- Independently cross-checks Day 10 part 1 and 38 tractable Day 10 part 2 machines with a Python verifier; both puzzle examples also match exactly.
+
+Weaknesses:
+
+- Took about `78.7 min` from the first prompt to the final answer and required extensive debugging after an initial 600-second timeout.
+- Warm runtime is about `3545.0 ms`, the slowest fully correct implementation in this evaluation.
+- Ships no Rust tests, produces one unused-variable warning, is not `cargo fmt --check` clean, and leaves per-machine timing output enabled on stderr.
+- Pi/Ollama failed to continue automatically after context compaction with `no user query found in messages`; one user message was needed to request the already-computed final summary. This was a harness recovery, not an algorithm or answer hint.
+- The agent claimed scratch verification artifacts were cleaned, but `lp_check.py`, `dbg.log`, and an orphaned temporary solver process remained in the original working directory. Those artifacts are excluded from this branch.
+
+Assessment:
+
+- A genuine 4/4 result from a locally hosted 27B Q4 model, and stronger on correctness than every partial branch, including `claude-opus-4.6`.
+- The result is impressive for its model size and local deployment, but weak runtime, no Rust tests, a long debugging trajectory, and imperfect cleanup keep it behind the other fully correct branches overall.
 
 ### `claude-opus-4.6`
 
@@ -417,31 +456,35 @@ Assessment:
    - Fully correct, with exact arithmetic and randomized Day 10 tests.
    - Much slower than the other fully correct branches and less ergonomic to run.
 
-6. `claude-opus-4.6`
+6. `pi-qwen3.8-27b`
+   - Fully correct with exact rational branch-and-bound on a local 27B Q4 model.
+   - Slowest fully correct runtime, no Rust tests, and one harness-recovery prompt after compaction.
+
+7. `claude-opus-4.6`
    - Best partial solution by delivery time and raw speed.
    - Fast and close, but not exact on Day 10 part 2.
 
-7. `claude-k2p6-preview`
+8. `claude-k2p6-preview`
    - Strong partial solution with exact rational arithmetic.
    - Very close on Day 10 part 2 (off by only 3), but still not optimal.
 
-8. `claude-mimo-v2.5-pro`
+9. `claude-mimo-v2.5-pro`
    - Strong partial solution with the best test discipline among the 3/4 branches.
    - Fast runtime at about `8.1 ms`, but Day 10 part 2 loses the optimum to an over-aggressive branch-and-bound.
 
-9. `kimi-k2p5`
+10. `kimi-k2p5`
    - Fastest runtime.
    - Stable, but heuristic on Day 10 part 2 and therefore incorrect.
 
-10. `claude-qwen3.6-plus`
+11. `claude-qwen3.6-plus`
    - Better self-checking than most incorrect branches.
    - Debug/release mismatch makes it hard to trust.
 
-11. `claude-glm-5.1`
+12. `claude-glm-5.1`
    - Improved from the earlier state because it now compiles.
    - Still fails exactness and stability on Day 10 part 2.
 
-12. `claude-k2p5`
+13. `claude-k2p5`
    - Weakest correctness and weakest modeling choices.
 
 ## Bottom Line
@@ -451,6 +494,8 @@ If I were choosing one branch to keep as the reference solution, I would keep `c
 `claude-deepseek-v4-pro` is the strongest alternative on a runtime basis: it is the only 4/4 branch with a sub-`100 ms` warm runtime and it ships unit tests for both days, but its delivery time was much higher and its bounded enumeration relies on a hard `50000` cap that I would want removed before treating it as the canonical solution.
 
 `kimi-k3` is also fully correct and has stronger randomized checking than most branches, but its `1265.0 ms` warm runtime, two-binary interface, and long delivery time make it better suited as a correctness cross-check than as the canonical implementation.
+
+`pi-qwen3.8-27b` is a notable local-model result: it reaches 4/4 with a 27B Q4 model and exact arithmetic, but its `3545.0 ms` warm runtime, lack of Rust tests, long debugging process, and harness recovery make it the weakest of the fully correct branches.
 
 `codex-gpt-5.5` is the best speed-to-correctness result: it delivered fastest and ran faster than `codex-gpt-5.4`, but it needs real tests and a cleaner module split before I would prefer it as the reference branch.
 
